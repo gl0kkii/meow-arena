@@ -689,18 +689,23 @@ let catPic = '';
 async function fetchModel(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error('Файл модели не найден');
+  if (!res.body) return res.arrayBuffer();
+  // сервер может сжимать файл, тогда content-length меньше настоящего размера;
+  // поэтому собираем куски, а этот заголовок берём только для процентов
   const total = +res.headers.get('content-length');
-  if (!total || !res.body) return res.arrayBuffer();
-  const out = new Uint8Array(total);
   const reader = res.body.getReader();
+  const chunks = [];
   let got = 0;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    out.set(value, got);
+    chunks.push(value);
     got += value.length;
-    $('bootMsg').textContent = `Будим котёнка… ${Math.round(got / total * 100)}%`;
+    if (total) $('bootMsg').textContent = `Будим котёнка… ${Math.min(99, Math.round(got / total * 100))}%`;
   }
+  const out = new Uint8Array(got);
+  let at = 0;
+  for (const c of chunks) { out.set(c, at); at += c.length; }
   return out.buffer;
 }
 async function readEmbeddedModel() {
